@@ -121,7 +121,7 @@ namespace dk {
         auto emplace(Args &&...args) -> std::pair<iterator, bool> {
             value_type value(std::forward<Args>(args)...);
             auto it = this->lower_bound(value.first);
-            if (it == std::end(m_container) || !equal_op()(*it, value)) {
+            if (it == std::end(m_container) || it->first != value.first) {
                 it = m_container.emplace(this->upper_bound(value.first), std::move(value));
                 return std::make_pair(it, true);
             }
@@ -234,18 +234,14 @@ namespace dk {
             }
         };
 
-        struct equal_op {
-            auto operator()(value_type const &a, value_type const &b) const noexcept -> bool {
-                return !key_compare()(a.first, b.first) && !key_compare()(b.first, a.first);
-            }
-        };
-
         auto sort() -> void {
             std::sort(std::begin(m_container), std::end(m_container), compare_op());
         }
 
         auto remove_duplicates() -> void {
-            auto end = std::unique(std::begin(m_container), std::end(m_container), equal_op());
+            auto end = std::unique(std::begin(m_container), std::end(m_container), [](value_type const &a, value_type const &b) {
+                return a.first == b.first;
+            });
             m_container.erase(end, std::end(m_container));
         }
     };
