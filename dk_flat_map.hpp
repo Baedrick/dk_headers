@@ -49,6 +49,16 @@ namespace dk {
                 this->remove_duplicates();
         }
 
+        flat_map(flat_map const &) = default;
+
+        flat_map(flat_map &&) noexcept = default;
+
+        flat_map& operator=(flat_map const &) = default;
+
+        flat_map& operator=(flat_map &&) noexcept = default;
+
+        ~flat_map() = default;
+
         [[nodiscard]] auto begin() noexcept -> iterator {
             return m_container.begin();
         }
@@ -158,9 +168,7 @@ namespace dk {
         }
 
         auto swap(flat_map &other) noexcept -> void {
-            container tmp = std::move(m_container);
-            m_container = std::move(other.m_container);
-            other.m_container = std::move(tmp);
+            m_container.swap(other.m_container);
         }
 
         auto clear() noexcept -> void {
