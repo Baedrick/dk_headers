@@ -27,7 +27,7 @@ Generally, these headers do not have dependencies and are to be directly include
 #include "dk_library.h"
 ```
 
-Check each header for specific documentation at the top of the file for what the macro should be, if there required.
+Check each header for specific documentation at the top of the file for what the macro should be, if required.
 
 > What is the license?
 
