@@ -1,8 +1,28 @@
-#include <algorithm>    // lower_bound, upper_bound, sort, unique
-#include <functional>   // less
-#include <iterator>     // distance
-#include <utility>      // pair, move, forward
-#include <vector>       // vector
+/**
+ * \file dk_flat_map.hpp - v0.1
+ * \author KOH Swee Teck Dedrick
+ * \brief
+ *      A flat map is an associative ordered container using a sorted vector.
+ * 
+ *      The container has a similar interface a std::map. It has O(n)
+ *      insertion and erase, and O(lg n) lookup.
+ * 
+ *      A flat map is best used when insertions and deletions are rare and
+ *      the container spend most of its time in lookups and iteration. It
+ *      exploits the cache friendliness of the backing array.
+ * 
+ *  LICENSE
+ *      License information at the end of the header (zlib).
+ */
+
+#ifndef DK_INCLUDE_DK_FLAT_MAP_H
+#define DK_INCLUDE_DK_FLAT_MAP_H
+
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <utility>
+#include <vector>
 
 namespace dk {
     template <
@@ -28,25 +48,23 @@ namespace dk {
     public:
         flat_map() = default;
 
-        explicit flat_map(std::initializer_list<value_type> list) : 
-            flat_map() {
-                m_container.reserve(list.size() * 2);
-                for (auto it = std::begin(list); it != std::end(list); ++it) {
-                    m_container.emplace_back(*it);
-                }
-                this->sort();
-                this->remove_duplicates();
+        explicit flat_map(std::initializer_list<value_type> list) : flat_map() {
+            m_container.reserve(list.size());
+            for (auto it = std::begin(list); it != std::end(list); ++it) {
+                m_container.emplace_back(*it);
+            }
+            this->sort();
+            this->remove_duplicates();
         }
 
         template <typename Iter>
-        flat_map(Iter begin, Iter end) :
-            flat_map() {
-                m_container.reserve(std::distance(begin, end) * 2);
-                for (; begin != end; ++begin) {
-                    m_container.emplace_back(*begin);
-                }
-                this->sort();
-                this->remove_duplicates();
+        flat_map(Iter begin, Iter end) : flat_map() {
+            m_container.reserve(std::distance(begin, end));
+            for (; begin != end; ++begin) {
+                m_container.emplace_back(*begin);
+            }
+            this->sort();
+            this->remove_duplicates();
         }
 
         flat_map(flat_map const &) = default;
@@ -120,22 +138,45 @@ namespace dk {
         }
 
         auto operator[](key_type const &key) -> mapped_type& {
-            return this->emplace(key).first->second;
+            return this->try_emplace(key).first->second;
         }
 
         auto operator[](key_type &&key) -> mapped_type& {
-            return this->emplace(std::move(key)).first->second;
+            return this->try_emplace(std::move(key)).first->second;
+        }
+
+        template <typename... Args>
+        auto try_emplace(key_type const &key, Args &&...args) -> std::pair<iterator, bool> {
+            auto it = this->lower_bound(key);
+            if (it == std::end(m_container) || !equal_op()(*it, key)) {
+                it = m_container.emplace(
+                    this->upper_bound(key),
+                    std::piecewise_construct,
+                    std::forward_as_tuple(key),
+                    std::forward_as_tuple(std::forward<Args>(args)...));
+                return std::make_pair(it, true);
+            }
+            return std::make_pair(it, false);
+        }
+
+        template <typename... Args>
+        auto try_emplace(key_type &&key, Args &&...args) -> std::pair<iterator, bool> {
+            auto it = this->lower_bound(key);
+            if (it == std::end(m_container) || !equal_op()(*it, key)) {
+                it = m_container.emplace(
+                    this->upper_bound(key),
+                    std::piecewise_construct,
+                    std::forward_as_tuple(std::move(key)),
+                    std::forward_as_tuple(std::forward<Args>(args)...));
+                return std::make_pair(it, true);
+            }
+            return std::make_pair(it, false);
         }
 
         template <typename... Args>
         auto emplace(Args &&...args) -> std::pair<iterator, bool> {
             value_type value(std::forward<Args>(args)...);
-            auto it = this->lower_bound(value.first);
-            if (it == std::end(m_container) || it->first != value.first) {
-                it = m_container.emplace(this->upper_bound(value.first), std::move(value));
-                return std::make_pair(it, true);
-            }
-            return std::make_pair(it, false);
+            return this->try_emplace(std::move(value.first), std::move(value.second));
         }
 
         auto insert(value_type const &value) -> std::pair<iterator, bool> {
@@ -160,7 +201,7 @@ namespace dk {
 
         auto erase(key_type const &key) -> size_type {
             auto const it = this->lower_bound(key);
-            if (it != std::end(m_container) && it->first == key) {
+            if (it != std::end(m_container) && equal_op()(*it, key)) {
                 m_container.erase(it);
                 return 1;
             }
@@ -177,7 +218,7 @@ namespace dk {
 
         auto find(key_type const &key) noexcept -> iterator {
             auto const it = this->lower_bound(key);
-            if (it != std::end(m_container) && it->first == key) {
+            if (it != std::end(m_container) && equal_op()(*it, key)) {
                 return it;
             }
             return std::end(m_container);
@@ -185,10 +226,10 @@ namespace dk {
 
         auto find(key_type const &key) const noexcept -> const_iterator {
             auto const it = this->lower_bound(key);
-            if (it != std::cend(m_container) && it->first == key) {
+            if (it != std::end(m_container) && equal_op()(*it, key)) {
                 return it;
             }
-            return std::cend(m_container);
+            return std::end(m_container);
         }
 
         [[nodiscard]] auto contains(key_type const &key) noexcept -> bool {
@@ -196,7 +237,7 @@ namespace dk {
         }
 
         [[nodiscard]] auto contains(key_type const &key) const noexcept -> bool {
-            return this->find(key) != std::cend(m_container);
+            return this->find(key) != std::end(m_container);
         }
 
         [[nodiscard]] auto lower_bound(key_type const &key) -> iterator {
@@ -204,7 +245,7 @@ namespace dk {
         }
 
         [[nodiscard]] auto lower_bound(key_type const &key) const -> const_iterator {
-            return std::lower_bound(std::cbegin(m_container), std::cend(m_container), key, compare_op());
+            return std::lower_bound(std::begin(m_container), std::end(m_container), key, compare_op());
         }
 
         [[nodiscard]] auto upper_bound(key_type const &key) -> iterator {
@@ -212,7 +253,7 @@ namespace dk {
         }
 
         [[nodiscard]] auto upper_bound(key_type const &key) const -> const_iterator {
-            return std::upper_bound(std::cbegin(m_container), std::cend(m_container), key, compare_op());
+            return std::upper_bound(std::begin(m_container), std::end(m_container), key, compare_op());
         }
 
         [[nodiscard]] auto equal_range(key_type const &key) -> std::pair<iterator, iterator> {
@@ -222,8 +263,8 @@ namespace dk {
         }
 
         [[nodiscard]] auto equal_range(key_type const &key) const -> std::pair<const_iterator, const_iterator> {
-            auto const lower_it = std::lower_bound(std::cbegin(m_container), std::cend(m_container), key, compare_op());
-            auto const upper_it = std::upper_bound(lower_it, std::cend(m_container), key, compare_op());
+            auto const lower_it = std::lower_bound(std::begin(m_container), std::end(m_container), key, compare_op());
+            auto const upper_it = std::upper_bound(lower_it, std::end(m_container), key, compare_op());
             return std::make_pair(lower_it, upper_it);
         }
 
@@ -242,15 +283,52 @@ namespace dk {
             }
         };
 
+        struct equal_op {
+            auto operator()(value_type const &a, value_type const &b) const noexcept -> bool {
+                return !compare_op()(a, b) && !compare_op()(b, a);
+            }
+
+            auto operator()(value_type const &a, key_type const &b) const noexcept -> bool {
+                return !compare_op()(a, b) && !compare_op()(b, a);
+            }
+
+            auto operator()(key_type const &a, value_type const &b) const noexcept -> bool {
+                return !compare_op()(a, b) && !compare_op()(b, a);
+            }
+        };
+
         auto sort() -> void {
             std::sort(std::begin(m_container), std::end(m_container), compare_op());
         }
 
         auto remove_duplicates() -> void {
-            auto end = std::unique(std::begin(m_container), std::end(m_container), [](value_type const &a, value_type const &b) {
-                return a.first == b.first;
-            });
+            auto end = std::unique(std::begin(m_container), std::end(m_container), equal_op());
             m_container.erase(end, std::end(m_container));
         }
     };
 }
+
+/**
+ *  This software is available under the zlib License.
+ *  ---
+ *
+ *  Copyright (C) 2025 KOH Swee Teck Dedrick
+ *
+ *  This software is provided 'as-is', without any express or implied
+ *  warranty. In no event will the authors be held liable for any damages
+ *  arising from the use of this software.
+ *
+ *  Permission is granted to anyone to use this software for any purpose,
+ *  including commercial applications, and to alter it and redistribute it
+ *  freely, subject to the following restrictions:
+ *
+ *  1. The origin of this software must not be misrepresented; you must not
+ *     claim that you wrote the original software. If you use this software
+ *     in a product, an acknowledgment in the product documentation would be
+ *     appreciated but is not required.
+ *  2. Altered source versions must be plainly marked as such, and must not be
+ *     misrepresented as being the original software.
+ *  3. This notice may not be removed or altered from any source distribution.
+ */
+
+#endif // DK_INCLUDE_DK_FLAT_MAP_H
