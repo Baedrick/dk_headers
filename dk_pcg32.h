@@ -166,7 +166,7 @@ uint32_t dk_pcg32_get_u32(dk_pcg32 *pcg) {
 
     // NOTE(Dedrick): Use XSH-RR variant.
     uint32_t const value = (uint32_t)((state ^ (state >> 18)) >> 27);
-    uint32_t const rot = (uint32_t)(state >> 59);
+    int32_t const rot = (int32_t)(state >> 59);
     return (value >> rot) | (value << ((-rot + 1u) & 31));
 }
 
