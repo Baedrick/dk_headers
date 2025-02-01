@@ -4,7 +4,7 @@ Various single-file libraries for C and C++, similar to [stb libraries](https://
 | Library         | Version | Language | Description                                                  |
 | --------------- | ------- | -------- | ------------------------------------------------------------ |
 | dk_flat_map.hpp | 0.1     | C++      | A template associative ordered container using a sorted vector. Similar interface to `std::map`. |
-|                 |         |          |                                                              |
+| dk_pcg32.h      | 0.1     | C/C++    | PCG32 random number generator with added common functions used in real-time applications. |
 
 These libraries are as-is, however, suggestions for improvements or bug fixes are appreciated. Please raise an issue before submitting a PR. Bug fixes are welcomed!
 
@@ -31,7 +31,7 @@ Check each header for specific documentation at the top of the file for what the
 
 > What is the license?
 
-Each library contains license information at the end of the file. It is generally a choice between MIT or zlib.
+Each library contains license information at the end of the file. It is generally a choice between MIT or zlib, or in the case of derived work, the original license.
 
 > Why have the declaration and definition in one file? Why not ship a .h/.hpp with a .c/.cpp?
 
@@ -58,5 +58,5 @@ void foo() {
 
 > Are your libraries "sane"?
 
-Unfortunately, writing a good header library is hard.
+I try to keep the interface and implementation sane, based off the uses I needed in my projects. Unfortunately, writing a good header library is hard.
 
