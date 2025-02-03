@@ -309,6 +309,12 @@ namespace dk {
 }
 
 /**
+ * Revision History:
+ *     0.2 (2025-02-03) add reserve();
+ *     0.1 (2025-02-03) first version;
+ */
+
+/**
  * This software is available under two licenses (A) or (B) - chose whichever
  * you prefer.
  * ---
