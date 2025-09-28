@@ -2,7 +2,7 @@
  * \file dk_static_vector.hpp - v0.1
  * \author KOH Swee Teck Dedrick
  * \brief
- *      An std::vector like container with a fixed capcaity and
+ *      An std::vector like container with a fixed capacity and
  *      stack-based allocation.
  * 
  *      The container provides an interface similar to std::vector
