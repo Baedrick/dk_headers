@@ -3,7 +3,7 @@ Various single-file libraries for C and C++, similar to [stb libraries](https://
 
 | Library         | Version | Language | Description                                                  |
 | --------------- | ------- | -------- | ------------------------------------------------------------ |
-| dk_flat_map.hpp | 0.2     | C++      | A template associative ordered container using a sorted vector. Similar interface to `std::map`. |
+| dk_flat_map.hpp | 0.21     | C++      | A template associative ordered container using a sorted vector. Similar interface to `std::map`. |
 | dk_pcg32.h      | 0.1     | C/C++    | PCG32 random number generator with added common functions used in real-time applications. |
 
 These libraries are as-is, however, suggestions for improvements or bug fixes are appreciated. Please raise an issue before submitting a PR. Bug fixes are welcomed!

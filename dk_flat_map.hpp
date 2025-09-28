@@ -1,5 +1,5 @@
 /**
- * \file dk_flat_map.hpp - v0.1
+ * \file dk_flat_map.hpp - v0.21
  * \author KOH Swee Teck Dedrick
  * \brief
  *      A flat map is an associative ordered container using a sorted vector.
@@ -15,8 +15,8 @@
  *      License information at the end of the header.
  */
 
-#ifndef DK_INCLUDE_DK_FLAT_MAP_H
-#define DK_INCLUDE_DK_FLAT_MAP_H
+#ifndef DK_INCLUDE_DK_FLAT_MAP_HPP
+#define DK_INCLUDE_DK_FLAT_MAP_HPP
 
 #include <algorithm>
 #include <functional>
@@ -310,6 +310,7 @@ namespace dk {
 
 /**
  * Revision History:
+ *     0.21 (2025-09-28) change header guard macro to DK_INCLUDE_DK_FLAT_MAP_HPP;
  *     0.2 (2025-02-03) add reserve();
  *     0.1 (2025-02-03) first version;
  */
@@ -362,4 +363,4 @@ namespace dk {
  * SOFTWARE.
  */
 
-#endif // DK_INCLUDE_DK_FLAT_MAP_H
+#endif // DK_INCLUDE_DK_FLAT_MAP_HPP
