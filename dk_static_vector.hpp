@@ -19,9 +19,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <iterator>
-#include <utility>
+#include <stdexcept>
 #include <type_traits>
+#include <utility>
 
 #if !defined(DK_ASSERT)
 #   if defined(_MSC_VER)
@@ -57,8 +59,11 @@ namespace dk {
 
         static_assert(std::is_unsigned_v<size_type>); // Must be unsigned integer.
 
+        // NOTE(Dedrick): noexcept(noexcept(expression)) follows this idiom from Raymond Chen.
+        // https://devblogs.microsoft.com/oldnewthing/20220408-00/?p=106438
+
     private:
-        alignas(value_type) u8 m_buffer[sizeof(value_type) * N];
+        alignas(value_type) std::uint8_t m_buffer[sizeof(value_type) * N];
         size_type m_size;
 
     public:
@@ -66,7 +71,7 @@ namespace dk {
             m_buffer{ },
             m_size{ 0 } { }
 
-        static_vector(size_type count) noexcept :
+        explicit static_vector(size_type count) :
             m_buffer{ },
             m_size{ count } {
             pointer const base = data();
@@ -75,7 +80,7 @@ namespace dk {
             }
         }
 
-        static_vector(size_type count, value_type const &v) noexcept :
+        static_vector(size_type count, value_type const &v) :
             m_buffer{ },
             m_size{ count } {
             pointer const base = data();
@@ -84,9 +89,9 @@ namespace dk {
             }
         }
 
-        static_vector(std::initializer_list<value_type> list) noexcept :
+        static_vector(std::initializer_list<value_type> list) :
             m_buffer{ },
-            m_size{ std::end(list) - std::begin(list) } {
+            m_size{ static_cast<size_type>(list.size()) } {
             pointer const base = data();
             size_type i = 0;
             for (auto it = std::begin(list); it != std::end(list); ++it, ++i) {
@@ -102,9 +107,9 @@ namespace dk {
             }
         }
 
-        static_vector(static_vector const &rhs) noexcept :
+        static_vector(static_vector const &rhs) :
             m_buffer{ },
-            m_size{ 0 } {
+            m_size{ rhs.size() } {
             size_type const count = rhs.size();
             pointer const base = data();
             for (size_type i = 0; i < count; ++i) {
@@ -112,9 +117,9 @@ namespace dk {
             }
         }
 
-        static_vector(static_vector &&rhs) noexcept :
+        static_vector(static_vector &&rhs) noexcept(std::is_nothrow_move_constructible_v<T>) :
             m_buffer{ },
-            m_size{ 0 } {
+            m_size{ rhs.size() } {
             size_type const count = rhs.size();
             pointer const base = data();
             for (size_type i = 0; i < count; ++i) {
@@ -123,12 +128,21 @@ namespace dk {
             rhs.clear();
         }
 
-        auto operator=(static_vector tmp) noexcept -> static_vector& {
+        auto operator=(static_vector tmp)
+            noexcept(
+                std::is_nothrow_move_constructible_v<T> &&
+                std::is_nothrow_swappable_v<T>) -> static_vector& {
             this->swap(tmp);
             return *this;
         }
 
-        auto swap(static_vector &rhs) noexcept -> void {
+        auto swap(static_vector &rhs)
+            noexcept(
+                std::is_nothrow_move_constructible_v<T> &&
+                std::is_nothrow_swappable_v<T>) -> void {
+            // NOTE(Dedrick): Since both vectors have their own buffers, a full swap involves
+            // element-wise swapping up to the minimum size, then moving the rest.
+
             pointer const lhs_base = data();
             pointer const rhs_base = rhs.data();
 
@@ -145,18 +159,10 @@ namespace dk {
             if (lhs_size < rhs_size) {
                 for (size_type i = lhs_size; i < rhs_size; ++i) {
                     new (lhs_base + i) value_type(std::move(rhs_base[i]));
-
-                    if constexpr (!std::is_trivially_destructible_v<value_type>) {
-                        rhs_base[i].~value_type();
-                    }
                 }
             } else if (lhs_size > rhs_size) {
                 for (size_type i = rhs_size; i < lhs_size; ++i) {
                     new (rhs_base + i) value_type(std::move(lhs_base[i]));
-
-                    if constexpr (!std::is_trivially_destructible_v<value_type>) {
-                        lhs_base[i].~value_type();
-                    }
                 }
             }
 
@@ -212,16 +218,20 @@ namespace dk {
             return std::reverse_iterator<const_iterator>{ begin() };
         }
 
+        [[nodiscard]] auto empty() const noexcept -> bool {
+            return m_size == 0;
+        }
+
         [[nodiscard]] auto size() const noexcept -> size_type {
             return m_size;
         }
 
-        [[nodiscard]] auto capacity() const noexcept -> size_type {
+        [[nodiscard]] auto max_size() const noexcept -> size_type {
             return static_cast<size_type>(N);
         }
 
-        [[nodiscard]] auto empty() const noexcept -> bool {
-            return m_size == 0;
+        [[nodiscard]] auto capacity() const noexcept -> size_type {
+            return static_cast<size_type>(N);
         }
 
         [[nodiscard]] auto front() noexcept -> reference {
@@ -259,29 +269,43 @@ namespace dk {
         auto operator[](size_type idx) noexcept -> reference {
             DK_ASSERT(idx < size()); // Out of bounds.
 
-            return data[idx];
+            return data()[idx];
         }
 
-        auto operator[](size_type idx) const noexcept -> reference {
+        auto operator[](size_type idx) const noexcept -> const_reference {
             DK_ASSERT(idx < size()); // Out of bounds.
 
-            return data[idx];
+            return data()[idx];
         }
 
-        auto push_back(value_type const &v) noexcept -> void {
+        auto at(size_type idx) -> reference {
+            if (idx >= m_size) {
+                throw std::out_of_range("static_vector::at: index out of range");
+            }
+            return data()[idx];
+        }
+
+        auto at(size_type idx) const -> const_reference {
+            if (idx >= m_size) {
+                throw std::out_of_range("static_vector::at: index out of range");
+            }
+            return data()[idx];
+        }
+
+        auto push_back(value_type const &v) -> void {
             DK_ASSERT(size() < N); // Vector is full.
 
             emplace_back(v);
         }
 
-        auto push_back(value_type &&v) noexcept -> void {
+        auto push_back(value_type &&v) noexcept(noexcept(value_type(std::move(v)))) -> void {
             DK_ASSERT(size() < N); // Vector is full.
 
             emplace_back(std::move(v));
         }
 
         template <typename... Args>
-        auto emplace_back(Args &&...args) noexcept -> reference {
+        auto emplace_back(Args &&...args) noexcept(noexcept(value_type(std::forward<Args>(args)...))) -> reference {
             DK_ASSERT(size() < N); // Vector is full.
 
             pointer const base = data();
@@ -300,7 +324,11 @@ namespace dk {
         }
 
         template <typename... Args>
-        auto emplace(const_iterator pos, Args &&...args) noexcept -> iterator {
+        auto emplace(const_iterator pos, Args &&...args)
+            noexcept(
+                std::is_nothrow_constructible_v<T, Args...> &&
+                std::is_nothrow_move_constructible_v<T> &&
+                std::is_nothrow_move_assignable_v<T>) -> iterator {
             DK_ASSERT(size() < N); // Vector is full.
             DK_ASSERT(pos >= cbegin() && pos <= cend()); // Iterator out of bounds.
 
@@ -316,14 +344,9 @@ namespace dk {
                 for (iterator it = end() - 1; it > p_insert; --it) {
                     *it = std::move(*(it - 1));
                 }
-                
-                // NOTE(Dedrick): The object at the insertion point is now moved-from.
-                // Destroy it and construct the new element in its place.
-                if constexpr (!std::is_trivially_destructible_v<value_type>) {
-                    p_insert->~value_type();
-                }
-                new (p_insert) value_type(std::forward<Args>(args)...);
 
+                // NOTE(Dedrick): Assign the new value to the now moved-from object at the insertion point.
+                *p_insert = value_type(std::forward<Args>(args)...);
             } else {
                 // NOTE(Dedrick): Inserting at the end is just emplace_back.
                 new (p_insert) value_type(std::forward<Args>(args)...);
@@ -333,15 +356,22 @@ namespace dk {
             return p_insert;
         }
 
-        auto insert(const_iterator pos, value_type const &value) noexcept -> iterator {
+        auto insert(const_iterator pos, value_type const &value)
+            noexcept(
+                std::is_nothrow_copy_constructible_v<T> &&
+                std::is_nothrow_move_constructible_v<T> &&
+                std::is_nothrow_move_assignable_v<T>) -> iterator {
             return emplace(pos, value);
         }
 
-        auto insert(const_iterator pos, value_type &&value) noexcept -> iterator {
+        auto insert(const_iterator pos, value_type &&value)
+            noexcept(
+                std::is_nothrow_move_constructible_v<T> &&
+                std::is_nothrow_move_assignable_v<T>) -> iterator {
             return emplace(pos, std::move(value));
         }
 
-        auto erase(const_iterator pos) noexcept -> iterator {
+        auto erase(const_iterator pos) noexcept(std::is_nothrow_move_assignable_v<T>) -> iterator {
             DK_ASSERT(!empty());
             DK_ASSERT(pos >= cbegin() && pos < cend());
 
@@ -357,7 +387,7 @@ namespace dk {
             return it;
         }
 
-        auto erase(const_iterator first, const_iterator last) noexcept -> iterator {
+        auto erase(const_iterator first, const_iterator last) noexcept(std::is_nothrow_move_assignable_v<T>) -> iterator {
             DK_ASSERT(first >= cbegin() && first <= cend());
             DK_ASSERT(last >= first && last <= cend());
 
@@ -384,7 +414,7 @@ namespace dk {
             destruct_and_downsize(0);
         }
 
-        auto resize(size_type count) noexcept -> void {
+        auto resize(size_type count) -> void {
             // NOTE(Dedrick): Shrink the vector and deconstruct elements.
             if (count <= size()) {
                 destruct_and_downsize(count);
@@ -399,7 +429,7 @@ namespace dk {
             m_size = count;
         }
 
-        auto resize(size_type count, value_type const &v) noexcept -> void {
+        auto resize(size_type count, value_type const &v) -> void {
             // NOTE(Dedrick): Shrink the vector and deconstruct elements.
             if (count <= size()) {
                 destruct_and_downsize(count);
@@ -415,7 +445,7 @@ namespace dk {
         }
 
     private:
-        auto destruct_and_downsize(usize idx) noexcept -> void {
+        auto destruct_and_downsize(std::size_t idx) noexcept -> void {
             DK_ASSERT(idx <= size());
 
             if constexpr (!std::is_trivially_destructible_v<value_type>) {
@@ -458,22 +488,36 @@ namespace dk {
     }
 
     template <typename T, std::size_t N, typename SizeType>
-    [[nodiscard]] bool operator<(const static_vector<T, N, SizeType>& lhs, const static_vector<T, N, SizeType>& rhs) {
-        return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+    [[nodiscard]] auto operator<(
+        static_vector<T, N, SizeType> const &lhs,
+        static_vector<T, N, SizeType> const &rhs
+    ) -> bool {
+        return std::lexicographical_compare(
+            std::begin(lhs), std::end(lhs),
+            std::begin(rhs), std::end(rhs));
     }
 
     template <typename T, std::size_t N, typename SizeType>
-    [[nodiscard]] bool operator<=(const static_vector<T, N, SizeType>& lhs, const static_vector<T, N, SizeType>& rhs) {
+    [[nodiscard]] auto operator<=(
+        static_vector<T, N, SizeType> const &lhs,
+        static_vector<T, N, SizeType> const &rhs
+    ) -> bool {
         return !(rhs < lhs);
     }
 
     template <typename T, std::size_t N, typename SizeType>
-    [[nodiscard]] bool operator>(const static_vector<T, N, SizeType>& lhs, const static_vector<T, N, SizeType>& rhs) {
+    [[nodiscard]] auto operator>(
+        static_vector<T, N, SizeType> const &lhs,
+        static_vector<T, N, SizeType> const &rhs
+    ) -> bool {
         return rhs < lhs;
     }
 
     template <typename T, std::size_t N, typename SizeType>
-    [[nodiscard]] bool operator>=(const static_vector<T, N, SizeType>& lhs, const static_vector<T, N, SizeType>& rhs) {
+    [[nodiscard]] auto operator>=(
+        static_vector<T, N, SizeType> const &lhs,
+        static_vector<T, N, SizeType> const &rhs
+    ) -> bool {
         return !(lhs < rhs);
     }
 #endif // __cplusplus >= 202002L
